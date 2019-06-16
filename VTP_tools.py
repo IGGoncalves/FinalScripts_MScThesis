@@ -11,8 +11,8 @@ def getNodesData(timesteps, path = ''):
     This function extracts data from VTP files (namely the cell_cell_triangles files) and store it in a DataFrame,
     outputted by the function. The user should indicate the timesteps to be extracted.
 
-    Extracted data (for each node):
-    nodeID, time, x, y, z, atFA
+    Output/ Extracted data (for each node):
+    DataFrame with columns "nodeID, time, x, y, z, atFA". Each row corresponds to a node, in a specific time point.
 
     Keyword arguments:
     timesteps (int/array) - time point(s) at which the user wants data to be extracted.
