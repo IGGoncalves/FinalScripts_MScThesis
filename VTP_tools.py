@@ -80,7 +80,8 @@ def getNodesData(timesteps, path = ''):
 
 def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
     """
-    This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes.
+    This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes,
+    with the nodes from different time points overlapped.
 
     Keyword arguments:
     nodesData - DataFrame with the nodes' info (see getNodesData)
@@ -156,4 +157,51 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
     plt.xlabel('Position [$\mu$m]', labelpad = 5)
     plt.legend(title = 'Timestep [min]')
 
+
+def plotNodes2DSubplots(nodesData, timesteps = 'all', view = 'XY'):
+    """
+    This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes,
+    with the nodes from different time points in different subplots.
+
+    Keyword arguments:
+    nodesData - DataFrame with the nodes' info (see getNodesData)
+    timesteps (int/array) - time point(s) at which the user wants data to plotted. if not specified, all the time points
+    present in the DataFrame are plotted
+    view (string) - view for the plot. Options: 'XY', 'XZ'
+    """
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    ### VARIABLE DEFINITION ###
+    if timesteps == 'all':
+
+        timesteps = np.unique(nodesData['time'])
+
+    sns.set_palette('viridis_r')
+
+    ### SCATTER PLOT ###
+    if view == 'XZ':
+
+        sns.set_style('white')
+
+        g = sns.FacetGrid(nodesData[nodesData['y'] <= 0], col = "time", margin_titles = True, aspect = 2.5)
+
+        g = (g.map(sns.scatterplot, "x", "z", s = 12)
+             .set(xlim = (-75, -20), ylim = (-.1, 7))
+             .set_axis_labels("Displacement [$\mu$m]", ""))
+
+
+    elif view == 'XY':
+
+        sns.set_style('darkgrid')
+
+        g = sns.FacetGrid(nodesData[nodesData['z'] > 1e-1], col = "time", margin_titles = True, aspect = 1.5)
+
+        g = (g.map(sns.scatterplot, "x", "y", s = 7)
+             .set(xlim = (-75, -20), ylim = (-14, 14))
+             .set_axis_labels("Displacement [$\mu$m]", ""))
+
+    sns.despine(left = True)
+    plt.yticks([])
 
