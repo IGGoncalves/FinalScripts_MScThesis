@@ -77,3 +77,66 @@ def getNodesData(timesteps, path = ''):
 
     return nodesData
 
+
+def plotNodes2D(nodesData, timesteps = 'all', view = 'XY', mode = 'overlap'):
+    """
+    This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes.
+
+    Keyword arguments:
+    nodesData - DataFrame with the nodes' info (see getNodesData)
+    timesteps (int/array) - time point(s) at which the user wants data to plotted. if not specified, all the time points
+    present in the DataFrame are plotted
+    view (string) - view for the plot. Options: 'XY' and 'XZ'
+    mode (string) - determines whether the nodes for different time points are plotted in the same figure or in various
+    subplots (one for each time point)
+    """
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    if timesteps == 'all':
+
+        timesteps = np.unique(nodesData['time'])
+
+    timestepNum = np.size(timesteps)
+
+    sns.set_palette('viridis_r', timestepNum)
+
+    ### SCATTER PLOT ###
+    for time in timesteps:
+
+        if view == 'XZ':
+
+            sns.set_style('white')
+
+            sns.scatterplot(nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['x'],
+                            nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['z'], label = time*2, s = 12)
+
+            # Figure aesthetics
+            plt.xlim(-75, -20)
+            plt.ylim(-.1, 7)
+
+        elif view == 'XY':
+
+            sns.set_style('darkgrid')
+
+            sns.scatterplot(nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['x'],
+                            nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['y'], label = time*2, s = 12)
+
+            # Figure aesthetics
+            plt.xlim(-75, -20)
+            plt.ylim(-14, 14)
+
+        sns.despine(left = True)
+        plt.yticks([])
+        plt.ylabel(' ')
+        plt.xlabel('Position [$\mu$m]', labelpad = 5)
+        plt.legend(title = 'Timestep [min]')
+
+
+data = getNodesData([0, 400], 'AON_FON/extract_files/sample_20/')
+plotNodes2D(data, view='XZ')
+
+def plotFinalDisp(nodesData):
+
+    x = 1
