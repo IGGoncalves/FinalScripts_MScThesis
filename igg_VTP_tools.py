@@ -15,7 +15,7 @@ def getNodesData(timesteps, path = ''):
     nodeID, time, x, y, z, atFA
 
     Keyword arguments:
-    timesteps (int/array) - time points at which the user wants data to be extracted
+    timesteps (int/array) - time point(s) at which the user wants data to be extracted.
     path (string) - path to the folder containing all VTP files. If it is not specified, current dir is used.
     """
 
@@ -27,9 +27,9 @@ def getNodesData(timesteps, path = ''):
     nodesData = pd.DataFrame(np.nan, index = range(0, rowNumber), columns = ['nodeID', 'time', 'x', 'y', 'z', 'atFA'])
 
     ### DATA EXTRACTION AND STORAGE ###
-    for ind, time in enumerate(timesteps):
+    if type(timesteps) == int:
 
-        filename = path + 'cell_cell_triangles_' + str(time) + '.vtp'
+        filename = path + 'cell_cell_triangles_' + str(timesteps) + '.vtp'
 
         ### SETTING UP THE READER ###
         reader = vtk.vtkXMLPolyDataReader()
@@ -43,13 +43,37 @@ def getNodesData(timesteps, path = ''):
         atFA = vtk_to_numpy(data.GetPointData().GetArray('atFA'))
 
         ### STORE DATA IN DATAFRAME ###
-        nodesData['nodeID'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = range(0, nodesNumber)
-        nodesData['time'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = time
-        nodesData['x'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 0] * 10e5
-        nodesData['y'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 2] * 10e5
-        nodesData['z'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 1] * 10e5
-        nodesData['atFA'][ind * nodesNumber: ind * nodesNumber + nodesNumber] = atFA
+        nodesData['nodeID'] = range(0, nodesNumber)
+        nodesData['time'] = timesteps
+        nodesData['x'] = coords[:, 0] * 10e5
+        nodesData['y'] = coords[:, 2] * 10e5
+        nodesData['z'] = coords[:, 1] * 10e5
+        nodesData['atFA'] = atFA
+
+    else:
+
+        for ind, time in enumerate(timesteps):
+
+            filename = path + 'cell_cell_triangles_' + str(time) + '.vtp'
+
+            ### SETTING UP THE READER ###
+            reader = vtk.vtkXMLPolyDataReader()
+            reader.SetFileName(filename)
+            reader.Update()
+
+            ### GET DATA FROM FILE ###
+            data = reader.GetOutput()
+            points = data.GetPoints()
+            coords = vtk_to_numpy(points.GetData())
+            atFA = vtk_to_numpy(data.GetPointData().GetArray('atFA'))
+
+            ### STORE DATA IN DATAFRAME ###
+            nodesData['nodeID'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = range(0, nodesNumber)
+            nodesData['time'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = time
+            nodesData['x'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 0] * 10e5
+            nodesData['y'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 2] * 10e5
+            nodesData['z'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 1] * 10e5
+            nodesData['atFA'][ind * nodesNumber: ind * nodesNumber + nodesNumber] = atFA
 
     return nodesData
 
-mydata = getNodesData([0,2], 'AON_FON/extract_files/sample_20/')
