@@ -78,7 +78,7 @@ def getNodesData(timesteps, path = ''):
     return nodesData
 
 
-def plotNodes2D(nodesData, timesteps = 'all', view = 'XY', mode = 'overlap'):
+def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
     """
     This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes.
 
@@ -86,14 +86,13 @@ def plotNodes2D(nodesData, timesteps = 'all', view = 'XY', mode = 'overlap'):
     nodesData - DataFrame with the nodes' info (see getNodesData)
     timesteps (int/array) - time point(s) at which the user wants data to plotted. if not specified, all the time points
     present in the DataFrame are plotted
-    view (string) - view for the plot. Options: 'XY' and 'XZ'
-    mode (string) - determines whether the nodes for different time points are plotted in the same figure or in various
-    subplots (one for each time point)
+    view (string) - view for the plot. Options: 'XY', 'XZ'
     """
 
     import matplotlib.pyplot as plt
     import seaborn as sns
 
+    ### VARIABLE DEFINITION ###
     if timesteps == 'all':
 
         timesteps = np.unique(nodesData['time'])
@@ -103,40 +102,58 @@ def plotNodes2D(nodesData, timesteps = 'all', view = 'XY', mode = 'overlap'):
     sns.set_palette('viridis_r', timestepNum)
 
     ### SCATTER PLOT ###
-    for time in timesteps:
+    if view == 'XZ':
 
-        if view == 'XZ':
+        sns.set_style('white')
 
-            sns.set_style('white')
+        plt.figure(figsize=(10, 2.5))
 
-            sns.scatterplot(nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['x'],
-                            nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['z'], label = time*2, s = 12)
+        if type(timesteps) == int:
 
-            # Figure aesthetics
-            plt.xlim(-75, -20)
-            plt.ylim(-.1, 7)
+            # Scatter with only the front nodes (y <= 0), for more clarity
+            sns.scatterplot(nodesData[nodesData['y'] <= 0][nodesData['time'] == timesteps]['x'],
+                            nodesData[nodesData['y'] <= 0][nodesData['time'] == timesteps]['z'], label=timesteps * 2, s=12)
 
-        elif view == 'XY':
+        else:
 
-            sns.set_style('darkgrid')
+            for time in timesteps:
 
-            sns.scatterplot(nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['x'],
-                            nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['y'], label = time*2, s = 12)
+                # Scatter with only the front nodes (y <= 0), for more clarity
+                sns.scatterplot(nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['x'],
+                        nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['z'], label = time*2, s = 12)
 
-            # Figure aesthetics
-            plt.xlim(-75, -20)
-            plt.ylim(-14, 14)
+        # Figure aesthetics
+        plt.xlim(-75, -20)
+        plt.ylim(-.1, 7)
 
-        sns.despine(left = True)
-        plt.yticks([])
-        plt.ylabel(' ')
-        plt.xlabel('Position [$\mu$m]', labelpad = 5)
-        plt.legend(title = 'Timestep [min]')
+    elif view == 'XY':
+
+        sns.set_style('darkgrid')
+
+        plt.figure(figsize = (10, 5))
+
+        if type(timesteps) == int:
+
+            # Scatter with only the top nodes (z > .1), for more clarity
+            sns.scatterplot(nodesData[nodesData['z'] > 1e-1][nodesData['time'] == timesteps]['x'],
+                            nodesData[nodesData['z'] > 1e-1][nodesData['time'] == timesteps]['y'], label=timesteps* 2, s=12)
+
+        else:
+
+            for time in timesteps:
+
+                # Scatter with only the top nodes (z > .1), for more clarity
+                sns.scatterplot(nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['x'],
+                        nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['y'], label = time*2, s = 12)
+
+        # Figure aesthetics
+        plt.xlim(-75, -20)
+        plt.ylim(-14, 14)
+
+    sns.despine(left = True)
+    plt.yticks([])
+    plt.ylabel(' ')
+    plt.xlabel('Position [$\mu$m]', labelpad = 5)
+    plt.legend(title = 'Timestep [min]')
 
 
-data = getNodesData([0, 400], 'AON_FON/extract_files/sample_20/')
-plotNodes2D(data, view='XZ')
-
-def plotFinalDisp(nodesData):
-
-    x = 1
