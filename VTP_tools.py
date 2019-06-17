@@ -280,6 +280,6 @@ def plotFinalDisp(nodesData, h5data, sample_num):
     x2 = h5data[h5data['sim_num'] == 1][h5data['samp_num'] == sample_num][h5data['time'] == newTime[1]*2]['CoM'].values*10e5
 
     plotNodes2DOverlapped(nodesData, newTime, view='XZ')
-    plt.plot([float(x1), float(x2)], [6.5, 6.5], marker='o', markersize=4, color='black')
+    plt.plot([float(x1), float(x2)], [6.5, 6.5], marker='o', markersize=3, color='black')
     plt.text((x2 + x1) / 2, 6.8,
              'Final displacement: ' + str(round((float(x2) - float(x1)), 2)) + ' $\mu$m', fontsize=12, ha='center')

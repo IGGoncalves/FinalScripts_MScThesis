@@ -76,4 +76,3 @@ def geth5Data(filesID, path = '', lastTimePoint = 710):
 
     return data
 
-data = geth5Data([0,1], 'AON_FON/pstudy/')
