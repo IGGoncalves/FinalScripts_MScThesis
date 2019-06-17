@@ -1,7 +1,6 @@
 ### Tools to use VTP files in Python ###
 
 ### IMPORT LIBRARIES ###
-import vtk
 import numpy as np
 import pandas as pd
 
@@ -19,6 +18,7 @@ def getNodesData(timesteps, path = ''):
     path (string) - path to the folder containing all VTP files. If it is not specified, current dir is used.
     """
 
+    import vtk
     from vtk.util.numpy_support import vtk_to_numpy
 
     ### VARIABLES DEFINITION ###
