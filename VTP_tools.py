@@ -262,6 +262,15 @@ def plotNodes3DOverlapped(nodesData, timesteps='all'):
 
 
 def plotFinalDisp(nodesData, h5data, sample_num):
+    """
+    This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes,
+    with the nodes from different time points in different subplots.
+
+    Keyword arguments:
+    nodesData - DataFrame with the nodes' info (see getNodesData)
+    timesteps (int/array) - time point(s) at which the user wants data to plotted. if not specified, all the time points
+    present in the DataFrame are plotted
+    """
 
     import matplotlib.pyplot as plt
 
