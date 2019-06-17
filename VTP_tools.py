@@ -178,7 +178,7 @@ def plotNodes2DSubplots(nodesData, timesteps = 'all', view = 'XY'):
 
         timesteps = np.unique(nodesData['time'])
 
-    sns.set_palette('viridis_r')
+    sns.set_palette('viridis_r', 3)
 
     ### SCATTER PLOT ###
     if view == 'XZ':
@@ -196,12 +196,65 @@ def plotNodes2DSubplots(nodesData, timesteps = 'all', view = 'XY'):
 
         sns.set_style('darkgrid')
 
-        g = sns.FacetGrid(nodesData[nodesData['z'] > 1e-1], col = "time", margin_titles = True, aspect = 1.5)
+        g = sns.FacetGrid(nodesData[nodesData['z'] > 1e-1], col = "time", margin_titles = True, aspect = 1.5, height=5)
 
-        g = (g.map(sns.scatterplot, "x", "y", s = 7)
+        g = (g.map(sns.scatterplot, "x", "y", s = 12)
              .set(xlim = (-75, -20), ylim = (-14, 14))
              .set_axis_labels("Displacement [$\mu$m]", ""))
 
     sns.despine(left = True)
     plt.yticks([])
 
+
+def plotNodes3DOverlapped(nodesData, timesteps='all'):
+    """
+    This function uses the x,y and z data from a nodesData DataFrame to create a scatter plot of the cell's cortex nodes,
+    with the nodes from different time points in different subplots.
+
+    Keyword arguments:
+    nodesData - DataFrame with the nodes' info (see getNodesData)
+    timesteps (int/array) - time point(s) at which the user wants data to plotted. if not specified, all the time points
+    present in the DataFrame are plotted
+    """
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    # VARIABLE DEFINITION
+    if timesteps == 'all':
+        timesteps = np.unique(nodesData['time'])
+
+    # FIGURE DEFINITION
+    sns.set_style('white')
+    sns.set_palette("viridis_r", 3)
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.gca(projection='3d')
+    ax._axis3don = True
+
+    # 3D SCATTER PLOT
+    if type(timesteps) == int:
+
+        ax.scatter(nodesData[nodesData['time'] == timesteps]['x'], nodesData[nodesData['time'] == timesteps]['y'],
+                   nodesData[nodesData['time'] == timesteps]['z'], s=11)
+
+    else:
+        for time in timesteps:
+
+            ax.scatter(nodesData[nodesData['time'] == time]['x'], nodesData[nodesData['time'] == time]['y'],
+                       nodesData[nodesData['time'] == time]['z'], s=11)
+
+    # FIGURE AESTHETICCS
+    ax.grid(False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax.set_zlim(0, 1.5e-5)
+    ax.set_xlim(-7.5e-5, -2e-5)
+    # Get rid of the panes
+    ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+    ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+    ax.w_zaxis.set_pane_color((0.917, 0.917, 0.949, 1.0))
+    # Get rid of the spines
+    ax.w_xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+    ax.w_yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+    ax.w_zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
