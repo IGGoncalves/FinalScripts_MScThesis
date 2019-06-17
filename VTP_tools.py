@@ -1,11 +1,11 @@
-### Tools to use VTP files in Python ###
+# Tools to use VTP files in Python
 
-### IMPORT LIBRARIES ###
+# IMPORT LIBRARIES
 import numpy as np
 import pandas as pd
 
 
-def getNodesData(timesteps, path = ''):
+def getNodesData(timesteps, path=''):
     """
     This function extracts data from VTP files (namely the cell_cell_triangles files) and store it in a DataFrame,
     outputted by the function. The user should indicate the timesteps to be extracted.
@@ -21,10 +21,10 @@ def getNodesData(timesteps, path = ''):
     import vtk
     from vtk.util.numpy_support import vtk_to_numpy
 
-    ### VARIABLES DEFINITION ###
+    # VARIABLES DEFINITION
     nodesNumber = 2562
     rowNumber = nodesNumber*np.size(timesteps)
-    nodesData = pd.DataFrame(np.nan, index = range(0, rowNumber), columns = ['nodeID', 'time', 'x', 'y', 'z', 'atFA'])
+    nodesData = pd.DataFrame(np.nan, index=range(0, rowNumber), columns=['nodeID', 'time', 'x', 'y', 'z', 'atFA'])
 
     ### DATA EXTRACTION AND STORAGE ###
     if type(timesteps) == int:
@@ -69,7 +69,7 @@ def getNodesData(timesteps, path = ''):
 
             ### STORE DATA IN DATAFRAME ###
             nodesData['nodeID'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = range(0, nodesNumber)
-            nodesData['time'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = time
+            nodesData['time'][ind * nodesNumber: ind * nodesNumber + nodesNumber] = time
             nodesData['x'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 0] * 10e5
             nodesData['y'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 2] * 10e5
             nodesData['z'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 1] * 10e5
