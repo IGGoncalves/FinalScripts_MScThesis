@@ -227,7 +227,7 @@ def plotNodes3DOverlapped(nodesData, timesteps='all'):
     # FIGURE DEFINITION
     sns.set_style('white')
     sns.set_palette("viridis_r", 3)
-    fig = plt.figure(figsize=(10, 8))
+    fig = plt.figure(figsize=(15, 4))
     ax = fig.gca(projection='3d')
     ax._axis3don = True
 
@@ -241,15 +241,16 @@ def plotNodes3DOverlapped(nodesData, timesteps='all'):
         for time in timesteps:
 
             ax.scatter(nodesData[nodesData['time'] == time]['x'], nodesData[nodesData['time'] == time]['y'],
-                       nodesData[nodesData['time'] == time]['z'], s=11)
+                       nodesData[nodesData['time'] == time]['z'], s=11, label=time*2)
 
     # FIGURE AESTHETICCS
     ax.grid(False)
+    ax.legend(title='Timesteps: ')
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
-    ax.set_zlim(0, 1.5e-5)
-    ax.set_xlim(-7.5e-5, -2e-5)
+    ax.set_zlim(-.1, 8)
+    ax.set_xlim(-75, -20)
     # Get rid of the panes
     ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
     ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
