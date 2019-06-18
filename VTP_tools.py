@@ -100,6 +100,9 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
 
     timestepNum = np.size(timesteps)
 
+    if timestepNum == 2:
+        timestepNum = 3
+
     sns.set_palette('viridis_r', timestepNum)
 
     ### SCATTER PLOT ###
@@ -219,6 +222,7 @@ def plotNodes3DOverlapped(nodesData, timesteps='all'):
 
     import matplotlib.pyplot as plt
     import seaborn as sns
+    from mpl_toolkits.mplot3d import Axes3D
 
     # VARIABLE DEFINITION
     if timesteps == 'all':
