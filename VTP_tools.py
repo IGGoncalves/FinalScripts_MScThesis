@@ -44,7 +44,7 @@ def getNodesData(timesteps, path=''):
 
         ### STORE DATA IN DATAFRAME ###
         nodesData['nodeID'] = range(0, nodesNumber)
-        nodesData['time'] = timesteps
+        nodesData['time'] = timesteps*2
         nodesData['x'] = coords[:, 0] * 10e5
         nodesData['y'] = coords[:, 2] * 10e5
         nodesData['z'] = coords[:, 1] * 10e5
@@ -69,7 +69,7 @@ def getNodesData(timesteps, path=''):
 
             ### STORE DATA IN DATAFRAME ###
             nodesData['nodeID'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = range(0, nodesNumber)
-            nodesData['time'][ind * nodesNumber: ind * nodesNumber + nodesNumber] = time
+            nodesData['time'][ind * nodesNumber: ind * nodesNumber + nodesNumber] = time*2
             nodesData['x'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 0] * 10e5
             nodesData['y'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 2] * 10e5
             nodesData['z'][ind * nodesNumber : ind * nodesNumber + nodesNumber] = coords[:, 1] * 10e5
@@ -157,7 +157,7 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
     sns.despine(left = True)
     plt.yticks([])
     plt.ylabel(' ')
-    plt.xlabel('Position [$\mu$m]', labelpad = 5)
+    plt.xlabel('Position [$\mu$m]', labelpad = 15)
     plt.legend(title = 'Timestep [min]')
 
 
@@ -188,7 +188,7 @@ def plotNodes2DSubplots(nodesData, timesteps = 'all', view = 'XY'):
 
         sns.set_style('white')
 
-        g = sns.FacetGrid(nodesData[nodesData['y'] <= 0], col = "time", margin_titles = True, aspect = 2.5)
+        g = sns.FacetGrid(nodesData[nodesData['y'] <= 0], col = "time", aspect = 2.5)
 
         g = (g.map(sns.scatterplot, "x", "z", s = 12)
              .set(xlim = (-75, -20), ylim = (-.1, 7))
@@ -199,7 +199,7 @@ def plotNodes2DSubplots(nodesData, timesteps = 'all', view = 'XY'):
 
         sns.set_style('darkgrid')
 
-        g = sns.FacetGrid(nodesData[nodesData['z'] > 1e-1], col = "time", margin_titles = True, aspect = 1.5, height=5)
+        g = sns.FacetGrid(nodesData[nodesData['z'] > .1], col = "time", aspect = 1.5, height=5)
 
         g = (g.map(sns.scatterplot, "x", "y", s = 12)
              .set(xlim = (-75, -20), ylim = (-14, 14))
