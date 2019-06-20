@@ -73,14 +73,10 @@ def geth5Data(filesID, path = '', lastTimePoint=710, timestep=2):
             data['sum_disp'][m * 24 * 710 + (n * 710) + 1: m * 24 * 710 + (n * 710) + 710] = cum_sum
             data['abs_disp'][m * 24 * 710 + (n * 710) + 1: m * 24 * 710 + (n * 710) + 710] = diff_disp
 
-            final_disp = np.mean(cum_sum[-5:])
-
-            data['final_disp'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = final_disp
-
     return data, params
 
 
-def plotFinalDisp(h5Data, mode='avg'):
+def plotFinalDisp(finalMetrics, mode='avg', disp='final_disp'):
     """
     This function extracts data from h5 files and store it in a DataFrame, outputted by the function.
 
@@ -96,13 +92,13 @@ def plotFinalDisp(h5Data, mode='avg'):
     sns.set_style("white")
     sns.set_palette('viridis_r', 6)
 
-    my_xticks = np.unique(h5Data['kECM'])
+    my_xticks = np.unique(finalMetrics['kECM'])
 
     if mode == 'all':
 
-        g = sns.FacetGrid(h5Data[709::710], col="lt_FA0", hue="kECM", aspect=1.15, size=5, gridspec_kws={"wspace": 0.08})
+        g = sns.FacetGrid(finalMetrics, col="lt_FA0", hue="kECM", aspect=1.15, size=5, gridspec_kws={"wspace": 0.08})
 
-        g = (g.map(plt.scatter, "log_kECM", "final_disp")
+        g = (g.map(plt.scatter, "log_kECM", disp)
              .set(xticks=np.log10(my_xticks))
              .add_legend()
              .set(ylim=(-5, 26))
@@ -121,7 +117,7 @@ def plotFinalDisp(h5Data, mode='avg'):
 
     elif mode == 'avg':
 
-        ax = sns.lmplot(data=h5Data[709::710], x="log_kECM", y="final_disp", col="lt_FA0", hue="kECM", fit_reg=False,
+        ax = sns.lmplot(data=finalMetrics, x="log_kECM", y=disp, col="lt_FA0", hue="kECM", fit_reg=False,
                         x_estimator=np.mean)
 
         ax.set(xticks=np.log10(my_xticks))
@@ -201,21 +197,22 @@ def plotMetricHeatMap(metric, h5Data, params):
     #plt.title('Number of "negative" jumps', weight='bold')
 
 
-def plotDisp(h5Data, mode='all', disp='sum_disp'):
+def plotDisp(h5Data, mode='all', disp='sum_disp', sim=1):
 
     sns.set_style("white")
     sns.set_palette('viridis_r', 6)
 
     if mode == 'all':
 
-        g = sns.FacetGrid(h5Data[h5Data['sim_num'] == 1], col="pFA_rev", hue="kECM", margin_titles=True, size=5)
+        g = sns.FacetGrid(h5Data[h5Data['sim_num'] == sim], col="lt_FA0", hue="kECM", size=5)
 
-        g = (g.map(plt.plot, "time", "sum_disp")
+        g = (g.map(plt.plot, "time", disp)
              .set(xlim=(0, None))
              .add_legend()
              .set_ylabels("Displacement [$\mu$m]", labelpad=10)
              .set_xlabels("Time [min]", labelpad=15)
-             .fig.subplots_adjust(wspace=.1, hspace=.05))
+             .set_titles("Lifetime: {col_name} min")
+             .fig.subplots_adjust(wspace=.1, hspace=.5))
 
         plt.subplots_adjust(top=.8)
         #plt.suptitle("Displacement of the cell's center of mass (simulation 1)", weight='bold')
@@ -223,13 +220,15 @@ def plotDisp(h5Data, mode='all', disp='sum_disp'):
     elif mode == 'overlap':
 
         ### PLOT DISPLACEMENT - CUMSUM (VARIATION) ###
-        g = sns.FacetGrid(h5Data, col="pFA_rev", hue="kECM", size=5)
+        g = sns.FacetGrid(h5Data, col="lt_FA0", hue="kECM", size=5)
 
         g = (g.map(sns.lineplot, "time", disp)
              .set(xlim=(0, None))
              .add_legend()
+             .set_titles("Lifetime: {col_name} min")
              .set_ylabels("Displacement [$\mu$m]", labelpad=10)
-             .set_xlabels("Time [min]", labelpad=15))
+             .set_xlabels("Time [min]", labelpad=15)
+             .fig.subplots_adjust(wspace=.1, hspace=.05))
 
 
 def getJumps(h5Data):
@@ -320,3 +319,39 @@ def getJumps(h5Data):
         allSimJumps[sim] = specificSimJumps
 
     return allSimJumps, jumpsInfo
+
+
+def getAbsDisp(h5Data, jumpsValues):
+
+    simNum = map(int, np.unique(h5Data['sim_num']))
+
+    for sim in simNum:
+
+        for samp in range(0, 24):
+
+            negJumps = jumpsValues[sim][samp]['neg_jumps']
+            fullJumps = jumpsValues[sim][samp]['full_jumps']
+            sampData = h5Data[h5Data['sim_num'] == sim][h5Data['samp_num'] == samp]
+            sampDiffDisp = sampData['diff_disp'].copy()
+
+            if np.size(negJumps) != 0:
+
+                # Invert displacement for negative peaks
+                for ind, jump in enumerate(fullJumps):
+
+                    if ind < np.size(fullJumps) - 1:
+
+                        if np.any(negJumps == jump):
+
+                            sampDiffDisp.iloc[jump / 2 - 5: fullJumps[ind + 1] / 2 - 1] = - sampDiffDisp.iloc[
+                                                                                            jump / 2 - 5: fullJumps[ind + 1] / 2 - 1]
+
+                    else:
+
+                        if np.any(negJumps == jump):
+                            sampDiffDisp.iloc[jump / 2 - 5:] = - sampDiffDisp.iloc[jump / 2 - 5:]
+
+            sampCumDisp = np.cumsum(sampDiffDisp)
+            h5Data['abs_disp'][(sim - 1) * 24 * 710 + (samp * 710): (sim - 1) * 24 * 710 + (samp * 710) + 710] = sampCumDisp
+
+    return h5Data
