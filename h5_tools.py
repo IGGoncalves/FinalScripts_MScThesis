@@ -6,77 +6,79 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def geth5Data(filesID, path = '', lastTimePoint=710, timestep=2):
+def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     """
-    This function extracts data from h5 files and store it in a DataFrame, outputted by the function.
+    Extracts data from  a group of .h5 files and stores it in a DataFrame outputted by the function.
 
     Output/ Extracted data (for each node):
     DataFrame with columns "nodeID, time, x, y, z, atFA".
 
     Keyword arguments:
-    filesID (int/array) -
-    path (string) - path to the folder containing all VTP files. If it is not specified, current dir is used.
+    ffilesID - (array/int) IDs of the simulation to be analyzed
+    path - (string) Path to the "Condition" directory
+    lastTimePoint - (int)) Number of time points in the simulation. If not specified, will be set as 710
+    sampleNum - (int) Number of samples in the simulation. If not specified, will be set as 24.
+    timestep - (int) Factor to match the recording time to the simulation time. If not specified, will be set as 1.
     """
 
+    ### IMPORT LIBRARIES
     import h5py
 
-    # Reading the first results file
-    f = h5py.File(path + '001/pstudy.h5', 'r')
-
-    # Storing the parameters (kECM and pFA_rev) in a DataFrame
-    params = pd.DataFrame(0.0, index=range(0, 24), columns=['samp_num', 'kECM', 'pFA_rev', 'lt_FA0'])
-
-    params['samp_num'] = range(0, 24)
-    params['kECM'] = f['results']['params']['kECM']['data'].value
-    params['pFA_rev'] = f['results']['params']['pFA_rev']['data'].value
-    params['lt_FA0'] = -1/(np.log(1 - f['results']['params']['pFA_rev']['data'].value))/60
-    params['lt_FA0'] = params['lt_FA0'].round(decimals=1)
-
-    data = pd.DataFrame(0.0, index=range(0, 710 * 24 * 5),
-                        columns=['time', 'sim_num', 'samp_num', 'kECM', 'log_kECM', 'pFA_rev', 'lt_FA0', 'nFA',
-                                 'lt_FA', 'multFam', 'rpdFA', 'trac_cell', 'CoM', 'sum_disp', 'diff_disp',
-                                 'final_disp', 'abs_disp', 'nFA_back'])
-
-    # Going through all .h5 files to get the results
-    for m in filesID:
-
-        f = h5py.File(path + str(m + 1).zfill(3) + '/pstudy.h5', 'r')
-
-        for n in range(0, 24):
-            data['time'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = np.arange(0, 710 * timestep, 2)
-            data['pFA_rev'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = params['pFA_rev'][n]
-            data['kECM'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = params['kECM'][n]
-            data['log_kECM'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = np.log10(params['kECM'][n])
-            data['lt_FA0'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = params['lt_FA0'][n]
-            data['sim_num'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = m + 1
-            data['samp_num'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = n
-
-            data['nFA'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = f['results']['sim_output']['nFA'][
-                                                                                        'data'][n, 0:710]
-            data['nFA_back'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = \
-            f['results']['sim_output']['nFA_back']['data'][n, 0:710]
-            data['lt_FA'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = \
-            f['results']['sim_output']['lt_FA']['data'][n, 0:710]
-            data['multFam'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = \
-            f['results']['sim_output']['multFam']['data'][n, 0:710]
-            data['rpdFA'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = \
-            f['results']['sim_output']['rpdFA']['data'][n, 0:710]
-            data['trac_cell'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = \
-            f['results']['sim_output']['trac_cell']['data'][n, 0:710]
-            data['CoM'][m * 24 * 710 + (n * 710): m * 24 * 710 + (n * 710) + 710] = f['results']['sim_output']['CoM'][
-                                                                                        'data'][:, :, 0][n, 0:710]
-
-            diff_disp = np.diff(f['results']['sim_output']['CoM']['data'][:, :, 0][n, 0:710]) * 10e5
-            cum_sum = np.cumsum(np.diff(f['results']['sim_output']['CoM']['data'][:, :, 0][n, 0:710])) * 10e5
-
-            data['diff_disp'][m * 24 * 710 + (n * 710) + 1: m * 24 * 710 + (n * 710) + 710] = diff_disp
-            data['sum_disp'][m * 24 * 710 + (n * 710) + 1: m * 24 * 710 + (n * 710) + 710] = cum_sum
-            data['abs_disp'][m * 24 * 710 + (n * 710) + 1: m * 24 * 710 + (n * 710) + 710] = diff_disp
-
-    return data, params
+    ### DEFINE VARIABLES
+    data = pd.DataFrame(0.0, index=range(0, 710 * 24 * 5), columns=['sim_num', 'samp_num', 'kECM', 'log_kECM',
+                                                                    'pFA_rev', 'lt_FA0', 'time', 'nFA', 'nFA_back',
+                                                                    'nFA_front', 'lt_FA', 'multFam', 'rpdFA',
+                                                                    'trac_cell', 'CoM'])
 
 
-def plotFinalDisp(finalMetrics, mode='avg', disp='final_disp'):
+    ### EXTRACT AND STORE DATA
+    for ind, sim in enumerate(filesID):
+
+        # Read file
+        f = h5py.File(path + str(sim).zfill(3) + '/pstudy.h5', 'r')
+
+        for samp in range(0, 24):
+
+            # Variables
+            initPoint = ind*sampleNum*lastTimePoint + (samp*lastTimePoint)
+            finalPoint = ind*sampleNum*lastTimePoint + (samp*lastTimePoint) + lastTimePoint
+            dataLoc = range(initPoint, finalPoint)
+            time = np.arange(0, lastTimePoint* timestep, timestep)
+
+            # General outputs (include all metrics)
+            params = f['results']['params']
+            output = f['results']['sim_output']
+
+            # "Meta" data
+            data['sim_num'][dataLoc] = sim
+            data['samp_num'][dataLoc] = samp
+            data['time'][dataLoc] = time
+
+            # Parameters
+            pFA_rev = params['pFA_rev']['data'][samp]
+            kECM = params['kECM']['data'][samp]
+            lt_FA0 = (-1 / (np.log(1 - pFA_rev)))/60
+
+            data['pFA_rev'][dataLoc] = pFA_rev
+            data['kECM'][dataLoc] = kECM
+            data['log_kECM'][dataLoc] = np.log10(kECM)
+            data['lt_FA0'][dataLoc] = round(lt_FA0, 1)
+
+            # Outputs
+            data['nFA'][dataLoc] = output['nFA']['data'][samp, 0:lastTimePoint]
+            data['nFA_back'][dataLoc] = output['nFA_back']['data'][samp, 0:lastTimePoint]
+            data['nFA_front'][dataLoc] = output['nFA_front']['data'][samp, 0:lastTimePoint]
+            data['lt_FA'][dataLoc] = output['lt_FA']['data'][samp, 0:lastTimePoint]
+            data['multFam'][dataLoc] = output['multFam']['data'][samp, 0:lastTimePoint]
+            data['rpdFA'][dataLoc] = output['rpdFA']['data'][samp, 0:lastTimePoint]
+            data['trac_cell'][dataLoc] = output['trac_cell']['data'][samp, 0:lastTimePoint]
+            data['CoM'][dataLoc] = output['CoM']['data'][:, :, 0][samp, 0:lastTimePoint]
+
+
+    return data
+
+
+def plotFinalDisp(finalMetrics, metric, mode='avg'):
     """
     This function extracts data from h5 files and store it in a DataFrame, outputted by the function.
 
@@ -98,7 +100,7 @@ def plotFinalDisp(finalMetrics, mode='avg', disp='final_disp'):
 
         g = sns.FacetGrid(finalMetrics, col="lt_FA0", hue="kECM", aspect=1.15, size=5, gridspec_kws={"wspace": 0.08})
 
-        g = (g.map(plt.scatter, "log_kECM", disp)
+        g = (g.map(plt.scatter, "log_kECM", metric)
              .set(xticks=np.log10(my_xticks))
              .add_legend()
              .set(ylim=(-5, 26))
@@ -117,7 +119,7 @@ def plotFinalDisp(finalMetrics, mode='avg', disp='final_disp'):
 
     elif mode == 'avg':
 
-        ax = sns.lmplot(data=finalMetrics, x="log_kECM", y=disp, col="lt_FA0", hue="kECM", fit_reg=False,
+        ax = sns.lmplot(data=finalMetrics, x="log_kECM", y=metric, col="lt_FA0", hue="kECM", fit_reg=False,
                         x_estimator=np.mean)
 
         ax.set(xticks=np.log10(my_xticks))
@@ -136,7 +138,7 @@ def plotFinalDisp(finalMetrics, mode='avg', disp='final_disp'):
         # plt.suptitle('Mean and SEM of the final displacement of the 5 simulations', weight = 'bold')
 
 
-def plotMetric3D(metric, h5Data):
+def plotMetric3D(metric, finalMetrics):
 
     from mpl_toolkits.mplot3d import Axes3D
     plt.rcParams['grid.color'] = "lightgray"
@@ -146,16 +148,16 @@ def plotMetric3D(metric, h5Data):
     fig = plt.figure(figsize=(14, 8))
     ax = fig.gca(projection='3d')
 
-    y = h5Data['kECM'][h5Data['time'] == 0][h5Data['sim_num'] == 1]
-    x = h5Data['lt_FA0'][h5Data['time'] == 0][h5Data['sim_num'] == 1]
+    y = finalMetrics['kECM'][finalMetrics['sim_num'] == 1]
+    x = finalMetrics['lt_FA0'][finalMetrics['sim_num'] == 1]
 
     surf = ax.plot_surface(np.log10(x.as_matrix().reshape((6, 4))),
                            np.log10(y.as_matrix().reshape((6, 4))),
-                           h5Data.groupby('samp_num')[metric].mean().as_matrix().reshape((6, 4)),
+                           finalMetrics.groupby('samp_num')[metric].mean().as_matrix().reshape((6, 4)),
                            cmap='BuGn', linewidths=0)
 
-    yticks = np.unique(h5Data['kECM'])
-    xticks = np.unique(h5Data['lt_FA0'])
+    yticks = np.unique(finalMetrics['kECM'])
+    xticks = np.unique(finalMetrics['lt_FA0'])
     ax.set_yticks(np.log10(yticks))
     ax.set_yticklabels(yticks)
 
@@ -177,11 +179,11 @@ def plotMetric3D(metric, h5Data):
     ax.w_zaxis.line.set_color('gray')
 
 
-def plotMetricHeatMap(metric, h5Data, params):
+def plotMetricHeatMap(metric, finalMetrics, params):
 
     fig, ax = plt.subplots(figsize=(9, 7))
 
-    new_metric_df = h5Data.groupby('samp_num')[metric].mean()
+    new_metric_df = finalMetrics.groupby('samp_num')[metric].mean()
 
     new_metric_df = pd.merge(new_metric_df, params, on='samp_num')
 
@@ -355,3 +357,54 @@ def getAbsDisp(h5Data, jumpsValues):
             h5Data['abs_disp'][(sim - 1) * 24 * 710 + (samp * 710): (sim - 1) * 24 * 710 + (samp * 710) + 710] = sampCumDisp
 
     return h5Data
+
+
+def getFinalMetrics(h5Data, jumpsValues, params):
+
+    finalMetrics = pd.DataFrame(np.nan, index=range(0, 24 * 5),
+                                columns=['sim_num', 'samp_num', 'nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam',
+                                         'rpdFA', 'trac_cell', 'sum_disp', 'abs_disp'])
+
+    for sim in range(0, 5):
+
+        for samp in range(0, 24):
+
+            criteria1 = h5Data['sim_num'] == (sim + 1)
+            criteria2 = h5Data['samp_num'] == samp
+            criteria = criteria1 & criteria2
+            metricLoc = sim * 24 + samp
+
+            # Independent variables
+            finalMetrics['sim_num'][metricLoc] = sim + 1
+            finalMetrics['samp_num'][metricLoc] = samp
+
+            # Metrics based on final values
+            for metric in ['rpdFA', 'sum_disp', 'abs_disp']:
+                finalMetrics[metric][metricLoc] = np.mean(h5Data[criteria][metric].iloc[-5])
+
+            # Metrics based on jumps
+            jumpValuesSize = np.size(jumpsValues[sim + 1][samp]['full_jumps'])
+
+            if jumpValuesSize > 0:
+
+                for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
+
+                    meanTemp = np.zeros(jumpValuesSize)
+
+                    for ind, jump in enumerate(jumpsValues[sim + 1][samp]['full_jumps']):
+                        jumpRange = range(jump / 2 - 5, jump / 2 + 1)
+                        meanTemp[ind] = np.nanmax(h5Data[criteria][metric].iloc[jumpRange])
+
+                    finalMetrics[metric][metricLoc] = np.mean(meanTemp)
+
+            else:
+
+                for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
+                    finalMetrics[metric][metricLoc] = np.nanmean(h5Data[criteria][metric])
+
+    finalMetrics = pd.merge(finalMetrics, params, on='samp_num')
+    finalMetrics['log_kECM'] = np.log10(finalMetrics['kECM'])
+    finalMetrics['lt_FA'] = finalMetrics['lt_FA']/60
+    finalMetrics['nFA_perc'] = finalMetrics['nFA_back']/finalMetrics['nFA']
+
+    return finalMetrics
