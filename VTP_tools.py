@@ -116,7 +116,7 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
 
             # Scatter with only the front nodes (y <= 0), for more clarity
             sns.scatterplot(nodesData[nodesData['y'] <= 0][nodesData['time'] == timesteps]['x'],
-                            nodesData[nodesData['y'] <= 0][nodesData['time'] == timesteps]['z'], label=timesteps * 2, s=12)
+                            nodesData[nodesData['y'] <= 0][nodesData['time'] == timesteps]['z'], label=timesteps, s=12)
 
         else:
 
@@ -124,7 +124,7 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
 
                 # Scatter with only the front nodes (y <= 0), for more clarity
                 sns.scatterplot(nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['x'],
-                        nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['z'], label = time*2, s = 12)
+                        nodesData[nodesData['y'] <= 0][nodesData['time'] == time]['z'], label = time, s = 12)
 
         # Figure aesthetics
         plt.xlim(-75, -20)
@@ -140,7 +140,7 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
 
             # Scatter with only the top nodes (z > .1), for more clarity
             sns.scatterplot(nodesData[nodesData['z'] > 1e-1][nodesData['time'] == timesteps]['x'],
-                            nodesData[nodesData['z'] > 1e-1][nodesData['time'] == timesteps]['y'], label=timesteps* 2, s=12)
+                            nodesData[nodesData['z'] > 1e-1][nodesData['time'] == timesteps]['y'], label=timesteps, s=12)
 
         else:
 
@@ -148,7 +148,7 @@ def plotNodes2DOverlapped(nodesData, timesteps = 'all', view = 'XY'):
 
                 # Scatter with only the top nodes (z > .1), for more clarity
                 sns.scatterplot(nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['x'],
-                        nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['y'], label = time*2, s = 12)
+                        nodesData[nodesData['z'] > 1e-1][nodesData['time'] == time]['y'], label = time, s = 12)
 
         # Figure aesthetics
         plt.xlim(-75, -20)
@@ -280,10 +280,10 @@ def plotFinalDisp(nodesData, h5data, sample_num):
 
     newTime = [nodesData['time'].iloc[0], nodesData['time'].iloc[-1]]
 
-    x1 = h5data[h5data['sim_num'] == 1][h5data['samp_num'] == sample_num][h5data['time'] == newTime[0]*2]['CoM'].values*10e5
-    x2 = h5data[h5data['sim_num'] == 1][h5data['samp_num'] == sample_num][h5data['time'] == newTime[1]*2]['CoM'].values*10e5
+    x1 = h5data[h5data['sim_num'] == 1][h5data['samp_num'] == sample_num][h5data['time'] == newTime[0]]['CoM'].values*10e5
+    x2 = h5data[h5data['sim_num'] == 1][h5data['samp_num'] == sample_num][h5data['time'] == newTime[1]]['CoM'].values*10e5
 
     plotNodes2DOverlapped(nodesData, newTime, view='XZ')
-    plt.plot([float(x1), float(x2)], [6.5, 6.5], marker='o', markersize=3, color='black')
+    plt.plot([x1, x2], [6.5, 6.5], marker='o', markersize=3, color='black')
     plt.text((x2 + x1) / 2, 6.8,
              'Final displacement: ' + str(round((float(x2) - float(x1)), 2)) + ' $\mu$m', fontsize=12, ha='center')

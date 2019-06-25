@@ -11,7 +11,9 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     Extracts data from  a group of .h5 files and stores it in a DataFrame outputted by the function.
 
     Output/ Extracted data (for each node):
-    DataFrame with columns "nodeID, time, x, y, z, atFA".
+    DataFrame with columns: simulation number, sample number, ECM stiffness, probability of disassembly,
+    initial lifetime, time, number of FAs (total, back and front), mean lifetime, maturation level of the fibers,
+    rupture, cell traction, center of mass (x coordinate).
 
     Keyword arguments:
     ffilesID - (array/int) IDs of the simulation to be analyzed
