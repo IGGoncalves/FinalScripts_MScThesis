@@ -25,10 +25,10 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     import h5py
 
     ### DEFINE VARIABLES
-    data = pd.DataFrame(0.0, index=range(0, 710 * 24 * 5), columns=['sim_num', 'samp_num', 'kECM', 'log_kECM',
-                                                                    'pFA_rev', 'lt_FA0', 'time', 'nFA', 'nFA_back',
-                                                                    'nFA_front', 'lt_FA', 'multFam', 'rpdFA',
-                                                                    'trac_cell', 'CoM'])
+    simNum = np.size(filesID)
+    data = pd.DataFrame(0.0, index=range(0, lastTimePoint*sampleNum*simNum),
+                        columns=['sim_num', 'samp_num', 'kECM', 'log_kECM', 'pFA_rev', 'lt_FA0', 'time',
+                                 'nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'rpdFA', 'trac_cell', 'CoM'])
 
 
     ### EXTRACT AND STORE DATA
