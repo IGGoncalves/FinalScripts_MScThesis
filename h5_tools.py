@@ -1,16 +1,15 @@
-### Tools to use VTP files in Python ###
-
-### IMPORT LIBRARIES ###
+### IMPORT GENERAL LIBRARIES
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
 def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     """
     Extracts data from  a group of .h5 files and stores it in a DataFrame outputted by the function.
 
-    Output/ Extracted data (for each node):
+    Output/ Extracted data:
     DataFrame with columns: simulation number, sample number, ECM stiffness, probability of disassembly,
     initial lifetime, time, number of FAs (total, back and front), mean lifetime, maturation level of the fibers,
     rupture, cell traction, center of mass (x coordinate).
@@ -23,7 +22,7 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     timestep - (int) Factor to match the recording time to the simulation time. If not specified, will be set as 1.
     """
 
-    ### IMPORT LIBRARIES
+    ### IMPORT SPECIFIC LIBRARIES
     import h5py
 
     ### DEFINE VARIABLES
@@ -39,7 +38,7 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
         # Read file
         f = h5py.File(path + str(sim).zfill(3) + '/pstudy.h5', 'r')
 
-        for samp in range(0, 24):
+        for samp in range(0, sampleNum):
 
             # Variables
             initPoint = ind*sampleNum*lastTimePoint + (samp*lastTimePoint)
@@ -80,7 +79,256 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     return data
 
 
-def plotFinalDisp(finalMetrics, metric, mode='avg'):
+def getSumDisp(h5Data):
+    """
+    Calculates the total displacement of the cell, disregarding the cell's position (i.g., how much it moves
+    instead of the coordinates of its positions. Stores the differences and the cumulative sum in the DataFrame
+    used as input.
+
+    Output:
+    DataFrame used as input, plus "diff_disp" and "sum_disp" columns.
+
+    Keyword arguments:
+    h5Data - DataFrame with the geth5Data() format.
+    """
+
+    ### DEFINE VARIABLES
+    simValues = h5Data['sim_num'].unique()
+    sampValues = h5Data['samp_num'].unique()
+    simSize = np.size(simValues)
+    sampSize = np.size(sampValues)
+    timeSize = np.size(h5Data['time'].unique())
+
+    diffSeries = pd.Series(0.0, index=range(0, simSize*sampSize*timeSize))
+    cumsumSeries = pd.Series(0.0, index=range(0, simSize*sampSize*timeSize))
+
+    # GET DIFFERENCES AND CALCULATE CUMULATIVE SUM
+    for ind, sim in enumerate(simValues):
+
+        condition1 = h5Data['sim_num'] == sim
+
+        for samp in sampValues:
+
+            condition2 = h5Data['samp_num'] == samp
+            condition = condition1 & condition2
+
+            # Variables
+            initPoint = int(ind*sampSize*timeSize + (samp*timeSize))
+            finalPoint = int(ind*sampSize*timeSize + (samp*timeSize) + timeSize)
+            diffDataLoc = range(initPoint + 1, finalPoint)
+            cumDataLoc = range(initPoint, finalPoint)
+
+            diffSeries[diffDataLoc] = np.diff(h5Data['CoM'][condition])*10e5
+            cumsumSeries[cumDataLoc] = np.cumsum(diffSeries[cumDataLoc])
+
+    # STORE RESULTS
+    h5Data['diff_disp'] = diffSeries
+    h5Data['sum_disp'] = cumsumSeries
+
+    return h5Data
+
+
+def getJumps(h5Data, partialJumpMin = 2e-1, fullJumpMin = 5e-1, jumpInterval = 30):
+    """
+    Identifies the jumps the cell makes while migrating, having
+
+    Output:
+    jumpsValues - Dicitonary with the time points at which jumps occur (total, partial, full and negative),
+    for all samples and simulations
+    jumpsInfo - DataFrame with the summarized data on the jumps (number of jumps, mean time between jumps,
+    standard deviation of the time between jumps, time at which the first jump occurs).
+
+    Keyword arguments:
+    h5Data - DataFrame with the geth5Data() format.
+    partialJumpMin - Threshold for partial jumps. If not defined, will be set as .2 micrometers
+    fullJumpMin - Threshold for full jumps. If not defined, will be set as .5 micrometers
+    jumpInterval - Time window between jumps, where no jumps should occur. If not defined will be set as 30 min
+    """
+
+    ### IMPORT SPECIFIC LIBRARIES
+    from scipy.signal import find_peaks
+
+    ### DEFINE VARIABLES
+    simValues = h5Data['sim_num'].unique()
+    sampValues = h5Data['samp_num'].unique()
+    simSize = np.size(simValues)
+    sampSize = np.size(sampValues)
+    timestep = h5Data['time'].iloc[1] - h5Data['time'].iloc[0]
+
+    allSimJumps = {}
+
+    jumpsInfo = pd.DataFrame(np.nan, index=range(0, sampSize*simSize),
+                             columns=['sim_num', 'samp_num', 'jumps_num', 'full_jump_num', 'partial_jump_num',
+                                      'neg_jumps_num', 'dettach_jump_num', 'first_full_jump', 'jump_time_mean',
+                                      'jump_time_std'])
+
+
+    for ind, sim in enumerate(simValues):
+
+        # Define dictionary to store the time values for the jumps of each sample
+        specificSimJumps = {}
+
+        # Going through the samples to store (and print) information on jumps
+        for samp in sampValues:
+
+            sampData = h5Data[h5Data['sim_num'] == sim][h5Data['samp_num'] == samp]
+            sampDiffDisp = sampData['diff_disp']
+
+            # Setting a threshold (minimum only, to prevent a small jump appearing next to a big one)
+            jumps, _ = find_peaks(abs(sampDiffDisp), distance = jumpInterval/timestep, height = partialJumpMin)
+
+            jumpsDiffDispValues = abs(sampDiffDisp.iloc[jumps])
+
+
+            # Differentiating small and big jumps
+            partialJumps = jumps[jumpsDiffDispValues < fullJumpMin]
+            fullJumps = jumps[jumpsDiffDispValues >= fullJumpMin]
+
+            # Small adjusment because of the timestep
+            partialJumps = partialJumps*timestep
+            fullJumps = fullJumps*timestep
+
+            negJumps = fullJumps[sampDiffDisp.iloc[fullJumps/timestep] < 0]
+
+            # Dictionary with all jumps, partial and full
+            jumpValues = {}
+
+            jumpValues['all_jumps'] = jumps*timestep
+            jumpValues['partial_jumps'] = partialJumps
+            jumpValues['full_jumps'] = fullJumps
+            jumpValues['neg_jumps'] = negJumps
+
+            dataLoc = ind*sampSize + samp
+
+            # Store information
+            jumpsInfo['sim_num'][dataLoc] = sim
+            jumpsInfo['samp_num'][dataLoc] = samp
+            jumpsInfo['jumps_num'][dataLoc] = np.size(jumps)
+            jumpsInfo['full_jump_num'][dataLoc] = np.size(fullJumps)
+            jumpsInfo['partial_jump_num'][dataLoc] = np.size(partialJumps)
+
+            if np.size(jumps) == 0:
+
+                jumpsInfo['first_full_jump'][dataLoc] = np.nan
+                jumpsInfo['jump_time_mean'][dataLoc] = np.nan
+                jumpsInfo['jump_time_std'][dataLoc] = np.nan
+                jumpsInfo['neg_jumps_num'][dataLoc] = 0
+
+            else:
+
+                if np.size(fullJumps) == 0:
+                    jumpsInfo['first_full_jump'][dataLoc] = np.nan
+                    jumpsInfo['neg_jumps_num'][dataLoc] = 0
+
+                else:
+                    jumpsInfo['first_full_jump'][dataLoc] = fullJumps[0]
+                    jumpsInfo['neg_jumps_num'][dataLoc] = np.size(negJumps)
+
+                jumpsInfo['jump_time_mean'][dataLoc] = np.mean(np.diff(jumps))
+                jumpsInfo['jump_time_std'][dataLoc] = np.std(np.diff(jumps))
+
+            # Store the jump information in the dictionary, with the sample number as key
+            specificSimJumps[samp] = jumpValues
+
+        allSimJumps[sim] = specificSimJumps
+
+    return allSimJumps, jumpsInfo
+
+
+def getaAbsDisp(h5Data, jumpsValues):
+    """
+    Calculates the total displacement of the cell, adding the jumps as if they all happened in the same
+    direction, and not in two opposite directions.
+
+    Output:
+    DataFrame used as input, plus "abs_disp" columns.
+
+    Keyword arguments:
+    h5Data - DataFrame with the geth5Data() format.
+    jumpsValues - Dictionary with the getJumps() dictionary format.
+    """
+
+    ### DEFINE VARIABLES
+    simValues = h5Data['sim_num'].unique()
+    sampValues = h5Data['samp_num'].unique()
+    simSize = np.size(simValues)
+    sampSize = np.size(sampValues)
+    timeSize = np.size(h5Data['time'].unique())
+    timestep = h5Data['time'].iloc[1] - h5Data['time'].iloc[0]
+    jumpFirstInterval = 5                                        # Number of time points before to jump to be flipped
+    jumpSecondInterval = 1                                       # Number of time points before the next jump
+
+    absSeries = pd.Series(0.0, index=range(0, simSize*sampSize*timeSize))
+
+    # GET ABSOLUTE DISPLACEMENT
+    for ind, sim in enumerate(simValues):
+
+        for samp in sampValues:
+
+            negJumps = jumpsValues[sim][samp]['neg_jumps']
+            fullJumps = jumpsValues[sim][samp]['full_jumps']
+            sampData = h5Data[h5Data['sim_num'] == sim][h5Data['samp_num'] == samp]
+            sampDiffDisp = sampData['diff_disp'].copy()
+
+            if np.size(negJumps) != 0:
+
+                # Invert displacement for negative peaks
+                for ind, jump in enumerate(fullJumps):
+
+                    initPoint = jump/timestep - jumpFirstInterval
+
+                    if ind < np.size(fullJumps) - 1:
+
+                        if np.any(negJumps == jump):
+
+                            finalPoint = fullJumps[ind + 1]/timestep - jumpSecondInterval
+
+                            jumpLoc = range(initPoint, finalPoint)
+
+                            sampDiffDisp.iloc[jumpLoc] = - sampDiffDisp.iloc[jumpLoc]
+
+                    else:
+
+                        if np.any(negJumps == jump):
+                            sampDiffDisp.iloc[initPoint:] = - sampDiffDisp.iloc[initPoint:]
+
+            sampCumDisp = np.cumsum(sampDiffDisp)
+
+            # STORE RESULTS
+            initDataPoint = int(ind*simSize*timeSize + samp*timeSize)
+            finalDataPoint = int(initDataPoint + timeSize)
+            dataLoc = range(initDataPoint, finalDataPoint)
+
+            absSeries[dataLoc] = sampCumDisp
+
+            h5Data['abs_disp'] = absSeries
+
+    return h5Data
+
+
+def getDisp(h5Data):
+    """
+    Combines getSumDisp(), getJumps() and getAbsDisp() to obtain all data on displacement.
+
+    Output:
+    DataFrame used as input, plus "diff_disp", "sum_disp" and "abs_disp" columns.
+    jumpsValues - Dicitonary with the time points at which jumps occur (total, partial, full and negative),
+    for all samples and simulations
+    jumpsInfo - DataFrame with the summarized data on the jumps (number of jumps, mean time between jumps,
+    standard deviation of the time between jumps, time at which the first jump occurs)
+
+    Keyword arguments:
+    h5Data - DataFrame with the geth5Data() format.
+    """
+
+    h5Data = getSumDisp(h5Data)
+    jumpsValues, jumpsInfo = getJumps(h5Data)
+    h5Data = getaAbsDisp(h5Data, jumpsValues)
+
+    return h5Data, jumpsValues, jumpsInfo
+
+
+def plotFinalValues(finalMetrics, metric, mode='avg'):
     """
     This function extracts data from h5 files and store it in a DataFrame, outputted by the function.
 
@@ -235,138 +483,32 @@ def plotDisp(h5Data, mode='all', disp='sum_disp', sim=1):
              .fig.subplots_adjust(wspace=.1, hspace=.05))
 
 
-def getJumps(h5Data):
 
-    from scipy.signal import find_peaks
+def getFinalMetrics(h5Data, jumpsValues):
+    """
+    Calculates a representative value for the metrics of all samples.
 
-    # Set the minimum difference in displacement to be considered a jump
-    partialJumpMin = 2e-1
-    fullJumpMin = 5e-1
+    Output:
+    DataFrame with the calculated values.
 
-    # Define dictionary to store the time values for the jumps of each sample (for all simulations)
-    allSimJumps = {}
-
-    # Define DataFrame to store general information on the jumps for each sample
-    jumpsInfo = pd.DataFrame(np.nan, index=range(0, 24 * 5), columns=['sim_num', 'samp_num', 'pFA_rev', 'lt_FA0', 'kECM',
-                                                                       'jumps_num', 'full_jump_num', 'partial_jump_num',
-                                                                       'first_full_jump', 'jump_time_mean',
-                                                                       'jump_time_std', 'neg_jumps_num'])
-
-    for sim in range(1, 6):
-
-        # Define dictionary to store the time values for the jumps of each sample
-        specificSimJumps = {}
-
-        # Going through the samples to store (and print) information on jumps
-        for samp in range(0, 24):
-
-            sampData = h5Data[h5Data['sim_num'] == sim][h5Data['samp_num'] == samp]
-            sampDiffDisp = sampData['diff_disp']
-
-            # Setting a threshold (minimum only, to prevent a small jump appearing next to a big one)
-            jumps, _ = find_peaks(abs(sampDiffDisp),distance=15, height=partialJumpMin)
-
-            jumpsDiffDispValues = abs(sampDiffDisp.iloc[jumps])
+    Keyword arguments:
+    h5Data - DataFrame with the geth5Data() format.
+    jumpsValues - Dictionary with the getJumps() dictionary format.
+    """
 
 
-            # Differentiating small and big jumps
-            partialJumps = jumps[jumpsDiffDispValues < fullJumpMin]
-            fullJumps = jumps[jumpsDiffDispValues >= fullJumpMin]
-
-            # Small adjusment because of the timestep
-            partialJumps = partialJumps * 2
-            fullJumps = fullJumps * 2
-
-            negJumps = fullJumps[sampDiffDisp.iloc[fullJumps / 2] < 0]
-
-            # Dictionary with all jumps, partial and full
-            jumpValues = {}
-
-            jumpValues['all_jumps'] = jumps * 2
-            jumpValues['partial_jumps'] = partialJumps
-            jumpValues['full_jumps'] = fullJumps
-            jumpValues['neg_jumps'] = negJumps
-
-            # Store information
-            jumpsInfo['sim_num'][(sim - 1) * 24 + samp] = sim
-            jumpsInfo['samp_num'][(sim - 1) * 24 + samp] = samp
-            jumpsInfo['jumps_num'][(sim - 1) * 24 + samp] = np.size(jumps)
-            jumpsInfo['full_jump_num'][(sim - 1) * 24 + samp] = np.size(fullJumps)
-            jumpsInfo['partial_jump_num'][(sim - 1) * 24 + samp] = np.size(partialJumps)
-            jumpsInfo['pFA_rev'][(sim - 1) * 24 + samp] = sampData['pFA_rev'][sampData['time'] == 0]
-            jumpsInfo['lt_FA0'][(sim - 1) * 24 + samp] = sampData['lt_FA0'][sampData['time'] == 0]
-            jumpsInfo['kECM'][(sim - 1) * 24 + samp] = sampData['kECM'][sampData['time'] == 0]
-
-            if np.size(jumps) == 0:
-
-                jumpsInfo['first_full_jump'][(sim - 1) * 24 + samp] = np.nan
-                jumpsInfo['jump_time_mean'][(sim - 1) * 24 + samp] = np.nan
-                jumpsInfo['jump_time_std'][(sim - 1) * 24 + samp] = np.nan
-                jumpsInfo['neg_jumps_num'][(sim - 1) * 24 + samp] = 0
-
-            else:
-
-                if np.size(fullJumps) == 0:
-                    jumpsInfo['first_full_jump'][(sim - 1) * 24 + samp] = np.nan
-                    jumpsInfo['neg_jumps_num'][(sim - 1) * 24 + samp] = 0
-
-                else:
-                    jumpsInfo['first_full_jump'][(sim - 1) * 24 + samp] = fullJumps[0]
-                    jumpsInfo['neg_jumps_num'][(sim - 1) * 24 + samp] = np.size(negJumps)
-
-                jumpsInfo['jump_time_mean'][(sim - 1) * 24 + samp] = np.mean(np.diff(jumps))
-                jumpsInfo['jump_time_std'][(sim - 1) * 24 + samp] = np.std(np.diff(jumps))
-
-            # Store the jump information in the dictionary, with the sample number as key
-            specificSimJumps[samp] = jumpValues
-
-        allSimJumps[sim] = specificSimJumps
-
-    return allSimJumps, jumpsInfo
-
-
-def getAbsDisp(h5Data, jumpsValues):
-
-    simNum = map(int, np.unique(h5Data['sim_num']))
-
-    for sim in simNum:
-
-        for samp in range(0, 24):
-
-            negJumps = jumpsValues[sim][samp]['neg_jumps']
-            fullJumps = jumpsValues[sim][samp]['full_jumps']
-            sampData = h5Data[h5Data['sim_num'] == sim][h5Data['samp_num'] == samp]
-            sampDiffDisp = sampData['diff_disp'].copy()
-
-            if np.size(negJumps) != 0:
-
-                # Invert displacement for negative peaks
-                for ind, jump in enumerate(fullJumps):
-
-                    if ind < np.size(fullJumps) - 1:
-
-                        if np.any(negJumps == jump):
-
-                            sampDiffDisp.iloc[jump / 2 - 5: fullJumps[ind + 1] / 2 - 1] = - sampDiffDisp.iloc[
-                                                                                            jump / 2 - 5: fullJumps[ind + 1] / 2 - 1]
-
-                    else:
-
-                        if np.any(negJumps == jump):
-                            sampDiffDisp.iloc[jump / 2 - 5:] = - sampDiffDisp.iloc[jump / 2 - 5:]
-
-            sampCumDisp = np.cumsum(sampDiffDisp)
-            h5Data['abs_disp'][(sim - 1) * 24 * 710 + (samp * 710): (sim - 1) * 24 * 710 + (samp * 710) + 710] = sampCumDisp
-
-    return h5Data
-
-
-def getFinalMetrics(h5Data, jumpsValues, params):
+    ### DEFINE VARIABLES
+    simValues = h5Data['sim_num'].unique()
+    sampValues = h5Data['samp_num'].unique()
+    simSize = np.size(simValues)
+    sampSize = np.size(sampValues)
+    timeSize = np.size(h5Data['time'].unique())
 
     finalMetrics = pd.DataFrame(np.nan, index=range(0, 24 * 5),
                                 columns=['sim_num', 'samp_num', 'nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam',
                                          'rpdFA', 'trac_cell', 'sum_disp', 'abs_disp'])
 
+    # GET FINAL METRICS
     for sim in range(0, 5):
 
         for samp in range(0, 24):
@@ -404,8 +546,11 @@ def getFinalMetrics(h5Data, jumpsValues, params):
                 for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
                     finalMetrics[metric][metricLoc] = np.nanmean(h5Data[criteria][metric])
 
-    finalMetrics = pd.merge(finalMetrics, params, on='samp_num')
-    finalMetrics['log_kECM'] = np.log10(finalMetrics['kECM'])
+    # STORE RESULTS
+    mergeColumns = ['kECM', 'log_kECM', 'pFA_rev', 'lt_FA0', 'samp_num']
+    paramsLoc = range(0, sampSize*timeSize, timeSize)
+
+    finalMetrics = pd.merge(finalMetrics, h5Data[mergeColumns].iloc[paramsLoc])
     finalMetrics['lt_FA'] = finalMetrics['lt_FA']/60
     finalMetrics['nFA_perc'] = finalMetrics['nFA_back']/finalMetrics['nFA']
 
