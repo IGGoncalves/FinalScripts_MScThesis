@@ -9,7 +9,7 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
     """
     Extracts data from  a group of .h5 files and stores it in a DataFrame outputted by the function.
 
-    Output/ Extracted data:
+    Output:
     DataFrame with columns: simulation number, sample number, ECM stiffness, probability of disassembly,
     initial lifetime, time, number of FAs (total, back and front), mean lifetime, maturation level of the fibers,
     rupture, cell traction, center of mass (x coordinate).
@@ -81,9 +81,9 @@ def geth5Data(filesID, path, lastTimePoint = 710, sampleNum = 24, timestep = 1):
 
 def getSumDisp(h5Data):
     """
-    Calculates the total displacement of the cell, disregarding the cell's position (i.g., how much it moves
-    instead of the coordinates of its positions. Stores the differences and the cumulative sum in the DataFrame
-    used as input.
+    Calculates the total displacement of the cell, disregarding the cell's position (i.e., how much it moves
+    instead of the coordinates of its positions). To do so, the differences between the center of mass in
+    consecutive time points are calculated and the results are then summed to get the cumulative displacement.
 
     Output:
     DataFrame used as input, plus "diff_disp" and "sum_disp" columns.
@@ -114,7 +114,7 @@ def getSumDisp(h5Data):
 
             # Variables
             initPoint = int(ind*sampSize*timeSize + (samp*timeSize))
-            finalPoint = int(ind*sampSize*timeSize + (samp*timeSize) + timeSize)
+            finalPoint = int(initPoint + timeSize)
             diffDataLoc = range(initPoint + 1, finalPoint)
             cumDataLoc = range(initPoint, finalPoint)
 
@@ -173,12 +173,12 @@ def getJumps(h5Data, partialJumpMin = 2e-1, fullJumpMin = 5e-1, jumpInterval = 3
 
             sampData = h5Data[h5Data['sim_num'] == sim][h5Data['samp_num'] == samp]
             sampDiffDisp = sampData['diff_disp']
+            sampLt = sampData['lt_FA']
 
             # Setting a threshold (minimum only, to prevent a small jump appearing next to a big one)
             jumps, _ = find_peaks(abs(sampDiffDisp), distance = jumpInterval/timestep, height = partialJumpMin)
 
             jumpsDiffDispValues = abs(sampDiffDisp.iloc[jumps])
-
 
             # Differentiating small and big jumps
             partialJumps = jumps[jumpsDiffDispValues < fullJumpMin]
@@ -190,6 +190,16 @@ def getJumps(h5Data, partialJumpMin = 2e-1, fullJumpMin = 5e-1, jumpInterval = 3
 
             negJumps = fullJumps[sampDiffDisp.iloc[fullJumps/timestep] < 0]
 
+            dettachJumps = np.copy(fullJumps)
+
+            if len(dettachJumps) > 0:
+
+                for dtjump in dettachJumps:
+
+                    if np.isnan(sampLt.iloc[int(dtjump/timestep) - 10: int(dtjump/timestep) + 10]).any() == False:
+
+                        dettachJumps = np.delete(dettachJumps, np.argwhere(dettachJumps==dtjump))
+
             # Dictionary with all jumps, partial and full
             jumpValues = {}
 
@@ -197,6 +207,7 @@ def getJumps(h5Data, partialJumpMin = 2e-1, fullJumpMin = 5e-1, jumpInterval = 3
             jumpValues['partial_jumps'] = partialJumps
             jumpValues['full_jumps'] = fullJumps
             jumpValues['neg_jumps'] = negJumps
+            jumpValues['dettach_jumps'] = dettachJumps
 
             dataLoc = ind*sampSize + samp
 
@@ -206,6 +217,7 @@ def getJumps(h5Data, partialJumpMin = 2e-1, fullJumpMin = 5e-1, jumpInterval = 3
             jumpsInfo['jumps_num'][dataLoc] = np.size(jumps)
             jumpsInfo['full_jump_num'][dataLoc] = np.size(fullJumps)
             jumpsInfo['partial_jump_num'][dataLoc] = np.size(partialJumps)
+            jumpsInfo['dettach_jump_num'][dataLoc] = np.size(dettachJumps)
 
             if np.size(jumps) == 0:
 
@@ -235,7 +247,7 @@ def getJumps(h5Data, partialJumpMin = 2e-1, fullJumpMin = 5e-1, jumpInterval = 3
     return allSimJumps, jumpsInfo
 
 
-def getaAbsDisp(h5Data, jumpsValues):
+def getAbsDisp(h5Data, jumpsValues):
     """
     Calculates the total displacement of the cell, adding the jumps as if they all happened in the same
     direction, and not in two opposite directions.
@@ -273,15 +285,15 @@ def getaAbsDisp(h5Data, jumpsValues):
             if np.size(negJumps) != 0:
 
                 # Invert displacement for negative peaks
-                for ind, jump in enumerate(fullJumps):
+                for indJump, jump in enumerate(fullJumps):
 
-                    initPoint = jump/timestep - jumpFirstInterval
+                    initPoint = int(jump/timestep - jumpFirstInterval)
 
-                    if ind < np.size(fullJumps) - 1:
+                    if indJump < np.size(fullJumps) - 1:
 
                         if np.any(negJumps == jump):
 
-                            finalPoint = fullJumps[ind + 1]/timestep - jumpSecondInterval
+                            finalPoint = int(fullJumps[indJump + 1]/timestep - jumpSecondInterval)
 
                             jumpLoc = range(initPoint, finalPoint)
 
@@ -295,13 +307,13 @@ def getaAbsDisp(h5Data, jumpsValues):
             sampCumDisp = np.cumsum(sampDiffDisp)
 
             # STORE RESULTS
-            initDataPoint = int(ind*simSize*timeSize + samp*timeSize)
-            finalDataPoint = int(initDataPoint + timeSize)
+            initDataPoint = int(ind*sampSize*timeSize + samp*timeSize)
+            finalDataPoint = int(ind*sampSize*timeSize + samp*timeSize + timeSize)
             dataLoc = range(initDataPoint, finalDataPoint)
 
             absSeries[dataLoc] = sampCumDisp
 
-            h5Data['abs_disp'] = absSeries
+    h5Data['abs_disp'] = absSeries
 
     return h5Data
 
@@ -323,21 +335,146 @@ def getDisp(h5Data):
 
     h5Data = getSumDisp(h5Data)
     jumpsValues, jumpsInfo = getJumps(h5Data)
-    h5Data = getaAbsDisp(h5Data, jumpsValues)
+    h5Data = getAbsDisp(h5Data, jumpsValues)
 
     return h5Data, jumpsValues, jumpsInfo
 
 
-def plotFinalValues(finalMetrics, metric, mode='avg'):
+def plotDisp(h5Data, disp = 'sum_disp', mode = 'single', sim = 1):
     """
-    This function extracts data from h5 files and store it in a DataFrame, outputted by the function.
+    Plots the displacement in terms of time. The user can choose to plot the cumulative (sum_disp) or absolute
+    (abs_disp) displacement, as well as the ID of the simulation to plot. It is also possible to plot the data from
+    all simulations, choosing the "overlap" mode.
 
-    Output/ Extracted data (for each node):
-    DataFrame with columns "nodeID, time, x, y, z, atFA".
+    Output:
+    Lineplot of the displacement in terms of time.
 
     Keyword arguments:
-    filesID (int/array) -
-    path (string) - path to the folder containing all VTP files. If it is not specified, current dir is used.
+    h5Data (DataFrame) - DataFrame with the geth5Data() format.
+    disp (string) - Type of displacement to plot. Options: sum_disp/abs_disp.
+    mode (string) - How to plot data, in terms of the simulations (plot a single simulation or a summarized version
+    of the data from all simulations). Options: single/overlap.
+    sim (int) - ID of the simulation to be plotted, for the "single" mode.
+    """
+
+    sns.set_style("white")
+    sns.set_palette('viridis_r', 6)
+
+    if mode == 'single':
+
+        g = sns.FacetGrid(h5Data[h5Data['sim_num'] == sim], col="lt_FA0", hue="kECM", size=5)
+
+        g = (g.map(plt.plot, "time", disp)
+             .set(xlim=(0, None))
+             .add_legend()
+             .set_ylabels("Displacement [$\mu$m]", labelpad=10)
+             .set_xlabels("Time [min]", labelpad=15)
+             .set_titles("Lifetime of the FAs: {col_name} min")
+             .fig.subplots_adjust(wspace=.1, hspace=.5))
+
+        plt.subplots_adjust(top=.8)
+        #plt.suptitle("Displacement of the cell's center of mass (simulation 1)", weight='bold')
+
+    elif mode == 'overlap':
+
+        ### PLOT DISPLACEMENT - CUMSUM (VARIATION) ###
+        g = sns.FacetGrid(h5Data, col="lt_FA0", hue="kECM", size=5)
+
+        g = (g.map(sns.lineplot, "time", disp)
+             .set(xlim=(0, None))
+             .add_legend()
+             .set_titles("Lifetime of the FAs: {col_name} min")
+             .set_ylabels("Displacement [$\mu$m]", labelpad=10)
+             .set_xlabels("Time [min]", labelpad=15)
+             .fig.subplots_adjust(wspace=.1, hspace=.05))
+
+
+def getFinalMetrics(h5Data, jumpsValues):
+    """
+    Calculates a representative value for the metrics of all samples.
+
+    Output:
+    DataFrame with the calculated values.
+
+    Keyword arguments:
+    h5Data - DataFrame with the geth5Data() format.
+    jumpsValues - Dictionary with the getJumps() dictionary format.
+    """
+
+
+    ### DEFINE VARIABLES
+    simValues = h5Data['sim_num'].unique()
+    sampValues = h5Data['samp_num'].unique()
+    simSize = np.size(simValues)
+    sampSize = np.size(sampValues)
+    timeSize = np.size(h5Data['time'].unique())
+
+    finalMetrics = pd.DataFrame(np.nan, index=range(0, sampSize*simSize),
+                                columns=['sim_num', 'samp_num', 'nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam',
+                                         'rpdFA', 'trac_cell', 'sum_disp', 'abs_disp'])
+
+    # GET FINAL METRICS
+    for ind, sim in enumerate(simValues):
+
+        for samp in range(0, sampSize):
+
+            criteria1 = h5Data['sim_num'] == sim
+            criteria2 = h5Data['samp_num'] == samp
+            criteria = criteria1 & criteria2
+            metricLoc = ind*sampSize + samp
+
+            # Independent variables
+            finalMetrics['sim_num'][metricLoc] = sim
+            finalMetrics['samp_num'][metricLoc] = samp
+
+            # Metrics based on final values
+            for metric in ['rpdFA', 'sum_disp', 'abs_disp']:
+                finalMetrics[metric][metricLoc] = np.mean(h5Data[criteria][metric].iloc[-5])
+
+            # Metrics based on jumps
+            jumpValuesSize = np.size(jumpsValues[sim][samp]['full_jumps'])
+
+            if jumpValuesSize > 0:
+
+                for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
+
+                    meanTemp = np.zeros(jumpValuesSize)
+
+                    for ind, jump in enumerate(jumpsValues[sim][samp]['full_jumps']):
+                        jumpRange = range(int(jump/2 - 5), int(jump/2 + 1))
+                        meanTemp[ind] = np.nanmax(h5Data[criteria][metric].iloc[jumpRange])
+
+                    finalMetrics[metric][metricLoc] = np.mean(meanTemp)
+
+            else:
+
+                for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
+                    finalMetrics[metric][metricLoc] = np.nanmean(h5Data[criteria][metric])
+
+    # STORE RESULTS
+    mergeColumns = ['kECM', 'log_kECM', 'pFA_rev', 'lt_FA0', 'samp_num']
+    paramsLoc = range(0, sampSize*timeSize, timeSize)
+
+    finalMetrics = pd.merge(finalMetrics, h5Data[mergeColumns].iloc[paramsLoc])
+    finalMetrics['lt_FA'] = finalMetrics['lt_FA']/60
+    finalMetrics['nFA_perc'] = finalMetrics['nFA_back']/finalMetrics['nFA']
+
+    return finalMetrics
+
+
+def plotFinalValues(finalMetrics, metric, mode = 'errorbar'):
+    """
+    Plots the final values for a specified metric, inputted by the user. The user can also choose
+    to plot the results into a scatterplot, showing the results for all simulations, or into a errorbar, which
+    will summarize that information. This choice is controled by the "mode" argument.
+
+    Output:
+    Errorbar/Scatterplot (depending on the mode).
+
+    Keyword arguments:
+    finalMetrics (DataFrame) - DataFrame with the finalMetrics() format.
+    metric (string) - Metric (must be present in the finalMetrics DataFrame) the user chooses to plot.
+    mode (string) - How the information should be plotted. Options: errorbar/scatter.
     """
 
     plt.figure(figsize=(20, 10))
@@ -346,7 +483,23 @@ def plotFinalValues(finalMetrics, metric, mode='avg'):
 
     my_xticks = np.unique(finalMetrics['kECM'])
 
-    if mode == 'all':
+    if metric == 'sum_disp' or metric == 'abs_disp':
+        ylab = "Displacement [$\mu$m]"
+
+    elif metric == 'nFA' or metric == 'nFA_back' or metric == 'nFA_front' or metric == 'rpdFA':
+        ylab = "Number of FAs"
+
+    elif metric == 'trac_cell':
+        ylab = "Cell's traction [Pa]"
+
+    elif metric == 'multFam':
+        ylab = "Maturation level"
+
+    elif metric == 'lt_FA':
+        ylab = "Lifetime [min]"
+
+
+    if mode == 'scatter':
 
         g = sns.FacetGrid(finalMetrics, col="lt_FA0", hue="kECM", aspect=1.15, size=5, gridspec_kws={"wspace": 0.08})
 
@@ -355,8 +508,8 @@ def plotFinalValues(finalMetrics, metric, mode='avg'):
              .add_legend()
              .set(ylim=(-5, 26))
              .set_xticklabels(my_xticks)
-             .set_titles("Lifetime: {col_name} min")
-             .set_ylabels("Displacement [$\mu$m]", labelpad=10)
+             .set_titles("Lifetime of the FAs: {col_name} min")
+             .set_ylabels(ylab, labelpad=10)
              .set_xlabels("kECM [N/m]", labelpad=15))
 
         for i in range(0, 4):
@@ -367,17 +520,17 @@ def plotFinalValues(finalMetrics, metric, mode='avg'):
         plt.subplots_adjust(top=0.8)
         # g.fig.suptitle('Scatter plot of the final displacement of the cell for all 5 simulations', weight = 'bold')
 
-    elif mode == 'avg':
+    elif mode == 'errorbar':
 
         ax = sns.lmplot(data=finalMetrics, x="log_kECM", y=metric, col="lt_FA0", hue="kECM", fit_reg=False,
                         x_estimator=np.mean)
 
         ax.set(xticks=np.log10(my_xticks))
-        ax.set_titles("Lifetime: {col_name} min")
+        ax.set_titles("Lifetime of the FAs: {col_name} min")
         ax.set_xticklabels(my_xticks)
         plt.subplots_adjust(top=0.8)
         ax.set_xlabels('kECM [N/m]', labelpad=15)
-        ax.set_ylabels('Displacement [$\mu$m]', labelpad=10)
+        ax.set_ylabels(ylab, labelpad=10)
 
         for i in range(0, 4):
             ax.axes.flatten()[i].yaxis.grid(color='lightgray', linestyle='--', linewidth=0.5)
@@ -388,7 +541,18 @@ def plotFinalValues(finalMetrics, metric, mode='avg'):
         # plt.suptitle('Mean and SEM of the final displacement of the 5 simulations', weight = 'bold')
 
 
-def plotMetric3D(metric, finalMetrics):
+def plotMetric3D(finalMetrics, metric):
+    """
+    This function plots a surface plot for a specified metric inputted by the user, using the values in
+    the finalMetrics DataFrame.
+
+    Output:
+    Surface plot.
+
+    Keyword arguments:
+    finalMetrics (DataFrame) - DataFrame with the finalMetrics() format.
+    metric (string) - Metric (must be present in the finalMetrics DataFrame) the user chooses to plot.
+    """
 
     from mpl_toolkits.mplot3d import Axes3D
     plt.rcParams['grid.color'] = "lightgray"
@@ -415,7 +579,7 @@ def plotMetric3D(metric, finalMetrics):
     ax.set_xticklabels(xticks)
 
     ax.set_ylabel('kECM [N/m]', labelpad=20)
-    ax.set_xlabel('Lifetime [min]', labelpad=20)
+    ax.set_xlabel('Lifetime of the FAs [min]', labelpad=20)
     ax.set_zlabel('Displacement [nm]', labelpad=10)
     #plt.gca().invert_xaxis()
     cb = fig.colorbar(surf)
@@ -429,129 +593,37 @@ def plotMetric3D(metric, finalMetrics):
     ax.w_zaxis.line.set_color('gray')
 
 
-def plotMetricHeatMap(metric, finalMetrics, params):
+def plotMetricHeatMap(metric, finalMetrics):
+    """
+    This function plots a heatmap for a specified metric inputted by the user, using the values in
+    the finalMetrics DataFrame.
+
+    Output.:
+    Heatmap.
+
+    Keyword arguments:
+    finalMetrics (DataFrame) - DataFrame with the finalMetrics() format.
+    metric (string) - Metric (must be present in the finalMetrics DataFrame) the user chooses to plot.
+    """
 
     fig, ax = plt.subplots(figsize=(9, 7))
 
-    new_metric_df = finalMetrics.groupby('samp_num')[metric].mean()
 
-    new_metric_df = pd.merge(new_metric_df, params, on='samp_num')
+    meanMetric = finalMetrics.groupby('samp_num')[metric].mean()
+
+    kECM = finalMetrics.groupby('samp_num')['kECM'].mean()
+    ltFA0 = finalMetrics.groupby('samp_num')['lt_FA0'].mean()
+
+    meanMetric = pd.merge(meanMetric, kECM, on = 'samp_num')
+    meanMetric = pd.merge(meanMetric, ltFA0, on='samp_num')
 
     # Creating the heatmaps
-    new_metric_df= new_metric_df.pivot('kECM', 'lt_FA0', metric)
+    meanMetric = meanMetric.pivot('kECM', 'lt_FA0', metric)
 
     # Plotting the heatmaps (saving colormap to plot colorbar afterwards)
-    im = sns.heatmap(new_metric_df, cmap="BuGn", linewidths=.9, annot=True, ax=ax)
+    im = sns.heatmap(meanMetric, cmap="BuGn", linewidths=.9, annot=True, ax=ax)
     plt.gca().invert_yaxis()
-    ax.set_yticklabels(np.unique(params['kECM']), va='center')
+    ax.set_yticklabels(np.unique(finalMetrics['kECM']), va='center')
     ax.set_ylabel('kECM [N/m]', labelpad=15)
-    ax.set_xlabel('Lifetime [min]', labelpad=15)
+    ax.set_xlabel('Lifetime of the FAs [min]', labelpad=15)
     #plt.title('Number of "negative" jumps', weight='bold')
-
-
-def plotDisp(h5Data, mode='all', disp='sum_disp', sim=1):
-
-    sns.set_style("white")
-    sns.set_palette('viridis_r', 6)
-
-    if mode == 'all':
-
-        g = sns.FacetGrid(h5Data[h5Data['sim_num'] == sim], col="lt_FA0", hue="kECM", size=5)
-
-        g = (g.map(plt.plot, "time", disp)
-             .set(xlim=(0, None))
-             .add_legend()
-             .set_ylabels("Displacement [$\mu$m]", labelpad=10)
-             .set_xlabels("Time [min]", labelpad=15)
-             .set_titles("Lifetime: {col_name} min")
-             .fig.subplots_adjust(wspace=.1, hspace=.5))
-
-        plt.subplots_adjust(top=.8)
-        #plt.suptitle("Displacement of the cell's center of mass (simulation 1)", weight='bold')
-
-    elif mode == 'overlap':
-
-        ### PLOT DISPLACEMENT - CUMSUM (VARIATION) ###
-        g = sns.FacetGrid(h5Data, col="lt_FA0", hue="kECM", size=5)
-
-        g = (g.map(sns.lineplot, "time", disp)
-             .set(xlim=(0, None))
-             .add_legend()
-             .set_titles("Lifetime: {col_name} min")
-             .set_ylabels("Displacement [$\mu$m]", labelpad=10)
-             .set_xlabels("Time [min]", labelpad=15)
-             .fig.subplots_adjust(wspace=.1, hspace=.05))
-
-
-
-def getFinalMetrics(h5Data, jumpsValues):
-    """
-    Calculates a representative value for the metrics of all samples.
-
-    Output:
-    DataFrame with the calculated values.
-
-    Keyword arguments:
-    h5Data - DataFrame with the geth5Data() format.
-    jumpsValues - Dictionary with the getJumps() dictionary format.
-    """
-
-
-    ### DEFINE VARIABLES
-    simValues = h5Data['sim_num'].unique()
-    sampValues = h5Data['samp_num'].unique()
-    simSize = np.size(simValues)
-    sampSize = np.size(sampValues)
-    timeSize = np.size(h5Data['time'].unique())
-
-    finalMetrics = pd.DataFrame(np.nan, index=range(0, 24 * 5),
-                                columns=['sim_num', 'samp_num', 'nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam',
-                                         'rpdFA', 'trac_cell', 'sum_disp', 'abs_disp'])
-
-    # GET FINAL METRICS
-    for sim in range(0, 5):
-
-        for samp in range(0, 24):
-
-            criteria1 = h5Data['sim_num'] == (sim + 1)
-            criteria2 = h5Data['samp_num'] == samp
-            criteria = criteria1 & criteria2
-            metricLoc = sim * 24 + samp
-
-            # Independent variables
-            finalMetrics['sim_num'][metricLoc] = sim + 1
-            finalMetrics['samp_num'][metricLoc] = samp
-
-            # Metrics based on final values
-            for metric in ['rpdFA', 'sum_disp', 'abs_disp']:
-                finalMetrics[metric][metricLoc] = np.mean(h5Data[criteria][metric].iloc[-5])
-
-            # Metrics based on jumps
-            jumpValuesSize = np.size(jumpsValues[sim + 1][samp]['full_jumps'])
-
-            if jumpValuesSize > 0:
-
-                for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
-
-                    meanTemp = np.zeros(jumpValuesSize)
-
-                    for ind, jump in enumerate(jumpsValues[sim + 1][samp]['full_jumps']):
-                        jumpRange = range(jump / 2 - 5, jump / 2 + 1)
-                        meanTemp[ind] = np.nanmax(h5Data[criteria][metric].iloc[jumpRange])
-
-                    finalMetrics[metric][metricLoc] = np.mean(meanTemp)
-
-            else:
-
-                for metric in ['nFA', 'nFA_back', 'nFA_front', 'lt_FA', 'multFam', 'trac_cell']:
-                    finalMetrics[metric][metricLoc] = np.nanmean(h5Data[criteria][metric])
-
-    # STORE RESULTS
-    mergeColumns = ['kECM', 'log_kECM', 'pFA_rev', 'lt_FA0', 'samp_num']
-    paramsLoc = range(0, sampSize*timeSize, timeSize)
-
-    finalMetrics = pd.merge(finalMetrics, h5Data[mergeColumns].iloc[paramsLoc])
-    finalMetrics['lt_FA'] = finalMetrics['lt_FA']/60
-    finalMetrics['nFA_perc'] = finalMetrics['nFA_back']/finalMetrics['nFA']
-
-    return finalMetrics
